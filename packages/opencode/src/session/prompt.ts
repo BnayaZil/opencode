@@ -240,6 +240,7 @@ export namespace SessionPrompt {
     using _ = defer(() => cancel(sessionID))
 
     let step = 0
+    const session = await Session.get(sessionID)
     while (true) {
       SessionStatus.set(sessionID, { type: "busy" })
       log.info("loop", { step, sessionID })
@@ -276,7 +277,7 @@ export namespace SessionPrompt {
       step++
       if (step === 1)
         ensureTitle({
-          session: await Session.get(sessionID),
+          session,
           modelID: lastUser.model.modelID,
           providerID: lastUser.model.providerID,
           message: msgs.find((m) => m.info.role === "user")!,
@@ -518,7 +519,7 @@ export namespace SessionPrompt {
       })
       const tools = await resolveTools({
         agent,
-        sessionID,
+        session,
         model,
         tools: lastUser.tools,
         processor,
@@ -580,7 +581,7 @@ export namespace SessionPrompt {
   async function resolveTools(input: {
     agent: Agent.Info
     model: Provider.Model
-    sessionID: string
+    session: Session.Info
     tools?: Record<string, boolean>
     processor: SessionProcessor.Info
   }) {
@@ -597,7 +598,7 @@ export namespace SessionPrompt {
             "tool.execute.before",
             {
               tool: item.id,
-              sessionID: input.sessionID,
+              sessionID: input.session.id,
               callID: options.toolCallId,
             },
             {
@@ -605,7 +606,7 @@ export namespace SessionPrompt {
             },
           )
           const ctx: Tool.Context = {
-            sessionID: input.sessionID,
+            sessionID: input.session.id,
             abort: options.abortSignal!,
             messageID: input.processor.message.id,
             callID: options.toolCallId,
@@ -631,7 +632,7 @@ export namespace SessionPrompt {
             async ask(req) {
               await PermissionNext.ask({
                 ...req,
-                sessionID: input.sessionID,
+                sessionID: input.session.parentID ?? input.session.id,
                 tool: { messageID: input.processor.message.id, callID: options.toolCallId },
                 ruleset: input.agent.permission,
               })
@@ -642,7 +643,7 @@ export namespace SessionPrompt {
             "tool.execute.after",
             {
               tool: item.id,
-              sessionID: input.sessionID,
+              sessionID: input.session.id,
               callID: options.toolCallId,
             },
             result,
@@ -667,7 +668,7 @@ export namespace SessionPrompt {
           "tool.execute.before",
           {
             tool: key,
-            sessionID: input.sessionID,
+            sessionID: input.session.id,
             callID: opts.toolCallId,
           },
           {
@@ -680,7 +681,7 @@ export namespace SessionPrompt {
           "tool.execute.after",
           {
             tool: key,
-            sessionID: input.sessionID,
+            sessionID: input.session.id,
             callID: opts.toolCallId,
           },
           result,
@@ -695,7 +696,7 @@ export namespace SessionPrompt {
           } else if (contentItem.type === "image") {
             attachments.push({
               id: Identifier.ascending("part"),
-              sessionID: input.sessionID,
+              sessionID: input.session.id,
               messageID: input.processor.message.id,
               type: "file",
               mime: contentItem.mimeType,
